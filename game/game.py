@@ -1,5 +1,6 @@
 import pygame
 import sys
+import os # ### CAMBIOS APLICADOS ### Importar el módulo os
 from player import Player
 from enemy import Enemy
 
@@ -17,10 +18,16 @@ class Game:
         self.font = pygame.font.SysFont(None, 36)
         self.title_font = pygame.font.SysFont(None, 64)
 
+        # ### CAMBIOS APLICADOS ### Nuevas variables para el control de niveles y fondos
+        self.current_level = 1 # Empieza en el nivel 1
+        self.max_levels = 3 # Define el número máximo de niveles (lvl1, lvl2, lvl3)
+        self.level_background = None # Variable para almacenar la imagen del fondo del nivel
+        self.load_level_background() # Carga el fondo del nivel inicial
+
         # Instancia jugador y crea enemigos iniciales
         self.player = Player(self.screen_width // 2, self.screen_height - 70)
         self.enemies = []
-        self.create_enemies()
+        self.create_enemies() # Llama a la creación de enemigos para el nivel 1
 
         self.score = 0
         self.game_over = False
@@ -35,8 +42,32 @@ class Game:
         self.pause_buttons = []  # Rectángulos de botones en menú pausa
         self.game_over_buttons = []  # Rectángulos de botones en menú game over
 
+    # ### CAMBIOS APLICADOS ### Nueva función para cargar el fondo del nivel
+    def load_level_background(self):
+        """Carga la imagen de fondo para el nivel actual."""
+        if 1 <= self.current_level <= self.max_levels:
+            # Construye la ruta de la imagen, subiendo una carpeta y entrando en 'images'
+            base_path = os.path.dirname(__file__) # Esto es 'game/'
+            image_name = f'lvl{self.current_level}.png'
+            image_path = os.path.join(base_path, '..', 'images', image_name)
+            image_path = os.path.abspath(image_path) # Asegurarse de tener la ruta absoluta
+
+            print(f"Cargando fondo del nivel {self.current_level} desde: {image_path}") # Debug
+
+            try:
+                # Usa .convert() si las imágenes no tienen transparencia, .convert_alpha() si sí la tienen.
+                self.level_background = pygame.image.load(image_path).convert()
+                # Escalar la imagen al tamaño de la pantalla
+                self.level_background = pygame.transform.scale(self.level_background, (self.screen_width, self.screen_height))
+            except pygame.error as e:
+                print(f"Error al cargar la imagen de fondo {image_name}: {e}")
+                self.level_background = None # Establecer a None si falla la carga
+        else:
+            self.level_background = None # Si el nivel excede max_levels, no hay fondo específico
+
     def create_enemies(self):
         # Genera una cuadrícula de enemigos
+        self.enemies = [] # ### CAMBIOS APLICADOS ### Limpia la lista de enemigos antes de crear nuevos
         for row in range(5):
             for col in range(3):
                 enemy = Enemy(100 + row * 90, 50 + col * 75)
@@ -85,7 +116,8 @@ class Game:
                     for i, btn_rect in enumerate(self.game_over_buttons):
                         if btn_rect.collidepoint(mouse_pos):
                             if i == 0:  # Reiniciar juego
-                                self.__init__()
+                                # ### CAMBIOS APLICADOS ### Asegurarse de re-inicializar el nivel y el fondo
+                                self.__init__() # Reinicia el juego, lo que también carga el nivel 1 y su fondo
                             elif i == 1:  # Ir al menú principal
                                 self.go_to_menu()
                             elif i == 2:  # Salir del juego
@@ -110,7 +142,8 @@ class Game:
             self.enemy_move_timer = 0
             any_enemy_hit_edge = False
             for enemy in self.enemies:
-                if enemy.update(self.screen_width):
+                # Pasa la dirección del enemigo para que pueda girar al llegar al borde
+                if enemy.update(self.screen_width): # El update del enemigo ahora devuelve si tocó borde
                     any_enemy_hit_edge = True
                 enemy.try_shoot()
             if any_enemy_hit_edge:
@@ -123,11 +156,21 @@ class Game:
 
         self.check_collisions()
 
-        # Si no quedan enemigos, se generan nuevos y aumenta su velocidad
-        if not self.enemies:
-            self.create_enemies()
-            for enemy in self.enemies:
-                enemy.speed += self.enemy_speed_increase
+        # ### CAMBIOS APLICADOS ### Lógica para avanzar al siguiente nivel
+        if not self.enemies: # Si no quedan enemigos
+            self.current_level += 1 # Avanza al siguiente nivel
+            if self.current_level <= self.max_levels:
+                print(f"¡Pasando al Nivel {self.current_level}!") # Debug
+                self.load_level_background() # Carga el nuevo fondo del nivel
+                self.create_enemies() # Crea nuevos enemigos para el nuevo nivel
+
+                # Opcional: Aumentar velocidad general o dificultad aquí para el nuevo nivel
+                for enemy in self.enemies:
+                    enemy.speed += self.enemy_speed_increase
+            else:
+                # El jugador ha superado todos los niveles
+                print("¡Has completado todos los niveles!")
+                self.game_over = True # O podrías redirigir a una pantalla de "Victoria"
 
         # Verifica si un enemigo llegó a la altura del jugador, termina juego
         for enemy in self.enemies:
@@ -243,7 +286,12 @@ class Game:
         self.game_over_buttons = [restart_btn, menu_btn, quit_btn]
 
     def draw(self):
-        self.screen.fill((0, 0, 0))
+        # ### CAMBIOS APLICADOS ### Dibujar el fondo del nivel primero
+        if self.level_background:
+            self.screen.blit(self.level_background, (0, 0))
+        else:
+            # Fallback a un color sólido si la imagen de fondo no se cargó
+            self.screen.fill((0, 0, 0))
 
         # Dibuja jugador, enemigos y balas
         self.player.draw(self.screen)
@@ -279,4 +327,3 @@ class Game:
             self.update()
             self.draw()
             self.clock.tick(self.fps)
-

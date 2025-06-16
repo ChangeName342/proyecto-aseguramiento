@@ -1,8 +1,11 @@
 import pygame
 import sys
-import os # ### CAMBIOS APLICADOS ### Importar el módulo os
+import os
+import random 
 from player import Player
 from enemy import Enemy
+from cloud import Cloud 
+from satellite import Satellite # ### CAMBIO CRÍTICO: Importar la clase Satellite ###
 
 class Game:
     def __init__(self):
@@ -18,63 +21,69 @@ class Game:
         self.font = pygame.font.SysFont(None, 36)
         self.title_font = pygame.font.SysFont(None, 64)
 
-        # ### CAMBIOS APLICADOS ### Nuevas variables para el control de niveles y fondos
-        self.current_level = 1 # Empieza en el nivel 1
-        self.max_levels = 3 # Define el número máximo de niveles (lvl1, lvl2, lvl3)
-        self.level_background = None # Variable para almacenar la imagen del fondo del nivel
-        self.load_level_background() # Carga el fondo del nivel inicial
+        self.current_level = 1
+        self.max_levels = 3
+        self.level_background = None
+        self.load_level_background()
 
-        # Instancia jugador y crea enemigos iniciales
         self.player = Player(self.screen_width // 2, self.screen_height - 70)
         self.enemies = []
-        self.create_enemies() # Llama a la creación de enemigos para el nivel 1
+        self.create_enemies()
 
         self.score = 0
         self.game_over = False
         self.enemy_direction = 1
         self.enemy_speed_increase = 0.5
         self.enemy_move_timer = 0
-        self.enemy_move_interval = 15  # Controla frecuencia de movimiento de enemigos
+        self.enemy_move_interval = 15
 
-        # Variables para pausa y estado de menús
+        # Lista para almacenar las nubes
+        self.clouds = []
+        # Control para generar nubes a intervalos
+        self.cloud_spawn_timer = 0
+        self.cloud_spawn_interval = 60 # Cada 60 frames (1 segundo a 60 FPS)
+
+        # ### CAMBIOS INCORPORADOS: Inicialización de Satélites ###
+        self.satellites = []
+        self.satellite_spawn_timer = 0
+        self.satellite_spawn_interval_min = 240 # 4 segundos * 60 FPS (menos frecuente)
+        self.satellite_spawn_interval_max = 480 # 8 segundos * 60 FPS
+        self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
+        # ### FIN CAMBIOS INCORPORADOS ###
+
         self.paused = False
         self.pause_menu_state = "main"  
-        self.pause_buttons = []  # Rectángulos de botones en menú pausa
-        self.game_over_buttons = []  # Rectángulos de botones en menú game over
+        self.pause_buttons = []
+        self.game_over_buttons = []
 
-    # ### CAMBIOS APLICADOS ### Nueva función para cargar el fondo del nivel
     def load_level_background(self):
         """Carga la imagen de fondo para el nivel actual."""
         if 1 <= self.current_level <= self.max_levels:
-            # Construye la ruta de la imagen, subiendo una carpeta y entrando en 'images'
-            base_path = os.path.dirname(__file__) # Esto es 'game/'
+            base_path = os.path.dirname(__file__)
             image_name = f'lvl{self.current_level}.png'
             image_path = os.path.join(base_path, '..', 'images', image_name)
-            image_path = os.path.abspath(image_path) # Asegurarse de tener la ruta absoluta
+            image_path = os.path.abspath(image_path)
 
-            print(f"Cargando fondo del nivel {self.current_level} desde: {image_path}") # Debug
+            print(f"Cargando fondo del nivel {self.current_level} desde: {image_path}")
 
             try:
-                # Usa .convert() si las imágenes no tienen transparencia, .convert_alpha() si sí la tienen.
                 self.level_background = pygame.image.load(image_path).convert()
-                # Escalar la imagen al tamaño de la pantalla
                 self.level_background = pygame.transform.scale(self.level_background, (self.screen_width, self.screen_height))
             except pygame.error as e:
                 print(f"Error al cargar la imagen de fondo {image_name}: {e}")
-                self.level_background = None # Establecer a None si falla la carga
+                self.level_background = None
         else:
-            self.level_background = None # Si el nivel excede max_levels, no hay fondo específico
+            self.level_background = None
+
 
     def create_enemies(self):
-        # Genera una cuadrícula de enemigos
-        self.enemies = [] # ### CAMBIOS APLICADOS ### Limpia la lista de enemigos antes de crear nuevos
+        self.enemies = []
         for row in range(5):
             for col in range(3):
                 enemy = Enemy(100 + row * 90, 50 + col * 75)
                 self.enemies.append(enemy)
 
     def handle_events(self):
-        # Procesa eventos del sistema y del usuario
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -83,7 +92,6 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and not self.game_over and not self.paused:
                     self.player.shoot()
-                # Manejo de pausa y navegación en menú pausa
                 if event.key == pygame.K_ESCAPE and not self.game_over:
                     if self.paused and self.pause_menu_state == "options":
                         self.pause_menu_state = "main"
@@ -94,37 +102,33 @@ class Game:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
                 
-                # Interacción con botones en menú pausa
                 if self.paused and not self.game_over:
                     for i, btn_rect in enumerate(self.pause_buttons):
                         if btn_rect.collidepoint(mouse_pos):
                             if self.pause_menu_state == "main":
-                                if i == 0:  # Continuar juego
+                                if i == 0:
                                     self.resume_game()
-                                elif i == 1:  # Mostrar opciones
+                                elif i == 1:
                                     self.show_options()
-                                elif i == 2:  # Ir al menú principal
+                                elif i == 2:
                                     self.go_to_menu()
-                                elif i == 3:  # Salir del juego
+                                elif i == 3:
                                     self.quit_game()
                             elif self.pause_menu_state == "options":
-                                if i == 2:  # Volver al menú pausa principal
+                                if i == 2:
                                     self.back_to_pause_main()
 
-                # Interacción con botones en menú de game over
                 elif self.game_over:
                     for i, btn_rect in enumerate(self.game_over_buttons):
                         if btn_rect.collidepoint(mouse_pos):
-                            if i == 0:  # Reiniciar juego
-                                # ### CAMBIOS APLICADOS ### Asegurarse de re-inicializar el nivel y el fondo
-                                self.__init__() # Reinicia el juego, lo que también carga el nivel 1 y su fondo
-                            elif i == 1:  # Ir al menú principal
+                            if i == 0:
+                                self.__init__()
+                            elif i == 1:
                                 self.go_to_menu()
-                            elif i == 2:  # Salir del juego
+                            elif i == 2:
                                 self.quit_game()
 
     def update(self):
-        # Evita actualizar si el juego está pausado o terminado
         if self.game_over or self.paused:
             return
 
@@ -136,50 +140,70 @@ class Game:
 
         self.player.update(self.screen_height)
 
-        # Controla el movimiento sincronizado de enemigos y su dirección
         self.enemy_move_timer += 1
         if self.enemy_move_timer >= self.enemy_move_interval:
             self.enemy_move_timer = 0
             any_enemy_hit_edge = False
             for enemy in self.enemies:
-                # Pasa la dirección del enemigo para que pueda girar al llegar al borde
-                if enemy.update(self.screen_width): # El update del enemigo ahora devuelve si tocó borde
+                if enemy.update(self.screen_width):
                     any_enemy_hit_edge = True
                 enemy.try_shoot()
             if any_enemy_hit_edge:
                 for enemy in self.enemies:
                     enemy.move_down()
 
-        # Actualiza balas disparadas por enemigos
         for enemy in self.enemies:
             enemy.update_bullets(self.screen_height)
 
         self.check_collisions()
 
-        # ### CAMBIOS APLICADOS ### Lógica para avanzar al siguiente nivel
-        if not self.enemies: # Si no quedan enemigos
-            self.current_level += 1 # Avanza al siguiente nivel
-            if self.current_level <= self.max_levels:
-                print(f"¡Pasando al Nivel {self.current_level}!") # Debug
-                self.load_level_background() # Carga el nuevo fondo del nivel
-                self.create_enemies() # Crea nuevos enemigos para el nuevo nivel
+        # Lógica para nubes (Nivel 2)
+        if self.current_level == 2:
+            self.cloud_spawn_timer += 1
+            if self.cloud_spawn_timer >= self.cloud_spawn_interval:
+                self.clouds.append(Cloud(self.screen_width, self.screen_height))
+                self.cloud_spawn_timer = 0
+            for cloud in self.clouds[:]:
+                cloud.update()
+                if cloud.is_offscreen(self.screen_height):
+                    self.clouds.remove(cloud)
+        else:
+            self.clouds = []
 
-                # Opcional: Aumentar velocidad general o dificultad aquí para el nuevo nivel
+        # ### Lógica para Satélites (Nivel 3) ###
+        if self.current_level == 3:
+            self.satellite_spawn_timer += 1
+            if self.satellite_spawn_timer >= self.next_satellite_spawn_interval:
+                self.satellites.append(Satellite(self.screen_width, self.screen_height))
+                self.satellite_spawn_timer = 0
+                # Establece el próximo intervalo de aparición de forma aleatoria
+                self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
+            for satellite in self.satellites[:]:
+                satellite.update()
+                if satellite.is_offscreen(self.screen_width):
+                    self.satellites.remove(satellite)
+        else:
+            self.satellites = [] # Limpiar los satélites si no es el nivel 3
+       
+
+        if not self.enemies:
+            self.current_level += 1
+            if self.current_level <= self.max_levels:
+                print(f"¡Pasando al Nivel {self.current_level}!")
+                self.load_level_background()
+                self.create_enemies()
                 for enemy in self.enemies:
                     enemy.speed += self.enemy_speed_increase
             else:
-                # El jugador ha superado todos los niveles
                 print("¡Has completado todos los niveles!")
-                self.game_over = True # O podrías redirigir a una pantalla de "Victoria"
+                self.game_over = True
 
-        # Verifica si un enemigo llegó a la altura del jugador, termina juego
         for enemy in self.enemies:
             if enemy.rect.bottom >= self.player.rect.top:
                 self.game_over = True
                 break
 
     def check_collisions(self):
-        # Detecta colisiones entre balas del jugador y enemigos
         for bullet in self.player.bullets[:]:
             for enemy in self.enemies[:]:
                 if bullet.colliderect(enemy.rect):
@@ -190,7 +214,6 @@ class Game:
                     self.score += 10
                     break
 
-        # Detecta colisiones entre balas enemigas y jugador
         for enemy in self.enemies:
             for bullet in enemy.bullets[:]:
                 if bullet.colliderect(self.player.rect):
@@ -203,7 +226,6 @@ class Game:
     def draw_button(self, text, x, y, w=250, h=60, 
                     bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0), 
                     hover_bg_color=(0, 100, 255), hover_text_color=(255, 255, 0)):
-        # Dibuja un botón con colores que cambian si el mouse está encima
         rect = pygame.Rect(0, 0, w, h)
         rect.center = (x, y)
 
@@ -221,10 +243,9 @@ class Game:
         text_rect = rendered_text.get_rect(center=rect.center)
         self.screen.blit(rendered_text, text_rect)
 
-        return rect  # Retorna el rect para detectar clics
+        return rect
 
     def draw_pause_menu(self):
-        # Fondo semitransparente y título para menú pausa
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(180)
         overlay.fill((0, 0, 0))
@@ -233,7 +254,6 @@ class Game:
         title = self.title_font.render("PAUSA", True, (255, 255, 0))
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 80))
 
-        # Dibuja botones según el estado actual del menú pausa
         if self.pause_menu_state == "main":
             continue_btn = self.draw_button("Continuar", self.screen_width//2, 250, 250, 60)
             options_btn = self.draw_button("Opciones", self.screen_width//2, 330, 250, 60)
@@ -257,7 +277,6 @@ class Game:
         self.pause_menu_state = "main"
 
     def go_to_menu(self):
-        # Importa y ejecuta el menú principal (externo)
         from menu import Menu
         menu = Menu()
         menu.run()
@@ -267,7 +286,6 @@ class Game:
         sys.exit()
 
     def draw_game_over_menu(self):
-        # Fondo semitransparente y título para menú game over
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
@@ -286,34 +304,39 @@ class Game:
         self.game_over_buttons = [restart_btn, menu_btn, quit_btn]
 
     def draw(self):
-        # ### CAMBIOS APLICADOS ### Dibujar el fondo del nivel primero
         if self.level_background:
             self.screen.blit(self.level_background, (0, 0))
         else:
-            # Fallback a un color sólido si la imagen de fondo no se cargó
             self.screen.fill((0, 0, 0))
 
-        # Dibuja jugador, enemigos y balas
+        # Dibujar nubes (Nivel 2)
+        if self.current_level == 2:
+            for cloud in self.clouds:
+                cloud.draw(self.screen)
+        
+        # ### CAMBIOS INCORPORADOS: Dibujar Satélites (Nivel 3) ###
+        if self.current_level == 3:
+            for satellite in self.satellites:
+                satellite.draw(self.screen)
+        # ### FIN CAMBIOS INCORPORADOS ###
+
+
         self.player.draw(self.screen)
         for enemy in self.enemies:
             enemy.draw(self.screen)
 
-        # Dibuja balas del jugador
         for bullet in self.player.bullets:
             pygame.draw.rect(self.screen, (255, 255, 0), bullet)
 
-        # Dibuja balas de enemigos
         for enemy in self.enemies:
             for bullet in enemy.bullets:
                 pygame.draw.rect(self.screen, (255, 0, 0), bullet)
 
-        # Dibuja vidas y puntaje
         lives_text = self.font.render(f"Vidas: {self.player.lives}", True, (255, 255, 255))
         score_text = self.font.render(f"Puntaje: {self.score}", True, (255, 255, 255))
         self.screen.blit(lives_text, (10, 10))
         self.screen.blit(score_text, (self.screen_width - score_text.get_width() - 10, 10))
 
-        # Menús
         if self.paused:
             self.draw_pause_menu()
         if self.game_over:

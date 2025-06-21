@@ -60,9 +60,21 @@ class Player:
             self.cooldown -= 1
 
     def draw(self, screen):
-        """Dibujar jugador y balas en pantalla."""
+        """Dibuja al jugador y sus balas con efecto visual mejorado para alta visibilidad."""
         screen.blit(self.image, self.rect)
+
         for bullet in self.bullets:
-            pygame.draw.rect(screen, (255, 255, 0), bullet)  # Balas amarillas
+           
+            glow_surface = pygame.Surface((12, 24), pygame.SRCALPHA)
+
+       
+            pygame.draw.ellipse(glow_surface, (180, 0, 180, 120), glow_surface.get_rect())
+            screen.blit(glow_surface, (bullet.centerx - 6, bullet.centery - 12))
+
+            # Dibujar la bala con color intenso
+            pygame.draw.rect(screen, (255, 0, 255), bullet)            
+            pygame.draw.rect(screen, (255, 255, 255), bullet, 1)        
+        
+
 
 

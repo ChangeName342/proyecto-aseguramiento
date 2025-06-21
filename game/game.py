@@ -3,9 +3,9 @@ import sys
 import os
 import random 
 from player import Player
-from enemy import Enemy
+from enemy import BasicEnemy, StrongEnemy
 from cloud import Cloud 
-from satellite import Satellite # ### CAMBIO CRÍTICO: Importar la clase Satellite ###
+from satellite import Satellite
 
 class Game:
     def __init__(self):
@@ -37,19 +37,15 @@ class Game:
         self.enemy_move_timer = 0
         self.enemy_move_interval = 15
 
-        # Lista para almacenar las nubes
         self.clouds = []
-        # Control para generar nubes a intervalos
         self.cloud_spawn_timer = 0
-        self.cloud_spawn_interval = 60 # Cada 60 frames (1 segundo a 60 FPS)
+        self.cloud_spawn_interval = 60
 
-        # ### CAMBIOS INCORPORADOS: Inicialización de Satélites ###
         self.satellites = []
         self.satellite_spawn_timer = 0
-        self.satellite_spawn_interval_min = 240 # 4 segundos * 60 FPS (menos frecuente)
-        self.satellite_spawn_interval_max = 480 # 8 segundos * 60 FPS
+        self.satellite_spawn_interval_min = 240
+        self.satellite_spawn_interval_max = 480
         self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
-        # ### FIN CAMBIOS INCORPORADOS ###
 
         self.paused = False
         self.pause_menu_state = "main"  
@@ -57,7 +53,6 @@ class Game:
         self.game_over_buttons = []
 
     def load_level_background(self):
-        """Carga la imagen de fondo para el nivel actual."""
         if 1 <= self.current_level <= self.max_levels:
             base_path = os.path.dirname(__file__)
             image_name = f'lvl{self.current_level}.png'
@@ -75,20 +70,47 @@ class Game:
         else:
             self.level_background = None
 
-
     def create_enemies(self):
         self.enemies = []
-        for row in range(5):
-            for col in range(3):
-                enemy = Enemy(100 + row * 90, 50 + col * 75)
+
+        base_enemy_speed = 4 + (self.current_level - 1) * 2
+        bullet_speed = 3 + (self.current_level - 1) * 2
+
+        if self.current_level == 1:
+            for i in range(12):
+                x = 100 + (i % 6) * 90
+                y = 50 + (i // 6) * 75
+                enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)  # Nivel pasado correctamente
+                enemy.speed = base_enemy_speed
                 self.enemies.append(enemy)
+
+        elif self.current_level == 2:
+            for i in range(6):
+                x = 100 + (i % 6) * 90
+                y = 50
+                enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)
+                enemy.speed = base_enemy_speed
+                self.enemies.append(enemy)
+
+            for i in range(6):
+                x = 100 + (i % 6) * 90
+                y = 140
+                enemy = StrongEnemy(x, y, bullet_speed, level=self.current_level)  # Nivel pasado correctamente
+                enemy.speed = base_enemy_speed
+                self.enemies.append(enemy)
+
+        else:
+            for row in range(5):
+                for col in range(3):
+                    enemy = BasicEnemy(100 + row * 90, 50 + col * 75, bullet_speed, level=self.current_level)
+                    enemy.speed = base_enemy_speed
+                    self.enemies.append(enemy)
 
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and not self.game_over and not self.paused:
                     self.player.shoot()
@@ -98,10 +120,8 @@ class Game:
                     else:
                         self.paused = not self.paused
                         self.pause_menu_state = "main"
-
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
-                
                 if self.paused and not self.game_over:
                     for i, btn_rect in enumerate(self.pause_buttons):
                         if btn_rect.collidepoint(mouse_pos):
@@ -117,7 +137,6 @@ class Game:
                             elif self.pause_menu_state == "options":
                                 if i == 2:
                                     self.back_to_pause_main()
-
                 elif self.game_over:
                     for i, btn_rect in enumerate(self.game_over_buttons):
                         if btn_rect.collidepoint(mouse_pos):
@@ -143,21 +162,24 @@ class Game:
         self.enemy_move_timer += 1
         if self.enemy_move_timer >= self.enemy_move_interval:
             self.enemy_move_timer = 0
-            any_enemy_hit_edge = False
+
+            hit_edge = False
             for enemy in self.enemies:
-                if enemy.update(self.screen_width):
-                    any_enemy_hit_edge = True
+                enemy.rect.x += enemy.speed * enemy.direction
                 enemy.try_shoot()
-            if any_enemy_hit_edge:
+                if enemy.rect.right >= self.screen_width or enemy.rect.left <= 0:
+                    hit_edge = True
+
+            if hit_edge:
                 for enemy in self.enemies:
-                    enemy.move_down()
+                    enemy.direction *= -1
+                    enemy.rect.y += enemy.move_down_distance
 
         for enemy in self.enemies:
             enemy.update_bullets(self.screen_height)
 
         self.check_collisions()
 
-        # Lógica para nubes (Nivel 2)
         if self.current_level == 2:
             self.cloud_spawn_timer += 1
             if self.cloud_spawn_timer >= self.cloud_spawn_interval:
@@ -170,21 +192,18 @@ class Game:
         else:
             self.clouds = []
 
-        # ### Lógica para Satélites (Nivel 3) ###
         if self.current_level == 3:
             self.satellite_spawn_timer += 1
             if self.satellite_spawn_timer >= self.next_satellite_spawn_interval:
                 self.satellites.append(Satellite(self.screen_width, self.screen_height))
                 self.satellite_spawn_timer = 0
-                # Establece el próximo intervalo de aparición de forma aleatoria
                 self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
             for satellite in self.satellites[:]:
                 satellite.update()
                 if satellite.is_offscreen(self.screen_width):
                     self.satellites.remove(satellite)
         else:
-            self.satellites = [] # Limpiar los satélites si no es el nivel 3
-       
+            self.satellites = []
 
         if not self.enemies:
             self.current_level += 1
@@ -210,8 +229,12 @@ class Game:
                     if bullet in self.player.bullets:
                         self.player.bullets.remove(bullet)
                     if enemy in self.enemies:
-                        self.enemies.remove(enemy)
-                    self.score += 10
+                        enemy.receive_damage()
+                        if enemy.dead:
+                            self.enemies.remove(enemy)
+                            self.score += 10
+                        else:
+                            self.score += 5
                     break
 
         for enemy in self.enemies:
@@ -309,17 +332,13 @@ class Game:
         else:
             self.screen.fill((0, 0, 0))
 
-        # Dibujar nubes (Nivel 2)
         if self.current_level == 2:
             for cloud in self.clouds:
                 cloud.draw(self.screen)
-        
-        # ### CAMBIOS INCORPORADOS: Dibujar Satélites (Nivel 3) ###
+
         if self.current_level == 3:
             for satellite in self.satellites:
                 satellite.draw(self.screen)
-        # ### FIN CAMBIOS INCORPORADOS ###
-
 
         self.player.draw(self.screen)
         for enemy in self.enemies:

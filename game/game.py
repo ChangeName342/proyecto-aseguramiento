@@ -3,9 +3,10 @@ import sys
 import os
 import random 
 from player import Player
-from enemy import BasicEnemy, StrongEnemy
+from enemy import BasicEnemy, StrongEnemy, FinalBoss
 from cloud import Cloud 
 from satellite import Satellite
+from shield import Shield
 
 class Game:
     def __init__(self):
@@ -46,7 +47,7 @@ class Game:
         self.satellite_spawn_interval_min = 240
         self.satellite_spawn_interval_max = 480
         self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
-
+        self.shields = []
         self.paused = False
         self.pause_menu_state = "main"  
         self.pause_buttons = []
@@ -85,26 +86,40 @@ class Game:
                 self.enemies.append(enemy)
 
         elif self.current_level == 2:
-            for i in range(6):
-                x = 100 + (i % 6) * 90
-                y = 50
-                enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)
+            positions = []
+
+            # Fila 1
+            y1 = 60
+            count1 = random.randint(4, 8)
+            spacing1 = (self.screen_width - 100) // (count1 + 1)
+            for i in range(count1):
+                x = 50 + (i + 1) * spacing1
+                positions.append((x, y1))
+
+            # Fila 2
+            y2 = 150
+            count2 = 12 - count1
+            spacing2 = (self.screen_width - 100) // (count2 + 1)
+            for i in range(count2):
+                x = 50 + (i + 1) * spacing2
+                positions.append((x, y2))
+
+            random.shuffle(positions) 
+
+            for i, (x, y) in enumerate(positions):
+                if i < 6:
+                    enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)
+                else:
+                    enemy = StrongEnemy(x, y, bullet_speed, level=self.current_level)
                 enemy.speed = base_enemy_speed
                 self.enemies.append(enemy)
 
-            for i in range(6):
-                x = 100 + (i % 6) * 90
-                y = 140
-                enemy = StrongEnemy(x, y, bullet_speed, level=self.current_level)  # Nivel pasado correctamente
-                enemy.speed = base_enemy_speed
-                self.enemies.append(enemy)
-
-        else:
-            for row in range(5):
-                for col in range(3):
-                    enemy = BasicEnemy(100 + row * 90, 50 + col * 75, bullet_speed, level=self.current_level)
-                    enemy.speed = base_enemy_speed
-                    self.enemies.append(enemy)
+        elif self.current_level == 3:
+           
+            x = self.screen_width // 2 - 45  
+            y = 50
+            boss = FinalBoss(x, y, bullet_speed)
+            self.enemies.append(boss)
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -211,6 +226,8 @@ class Game:
                 print(f"¡Pasando al Nivel {self.current_level}!")
                 self.load_level_background()
                 self.create_enemies()
+                if self.current_level in [2, 3]:
+                    self.create_shields()
                 for enemy in self.enemies:
                     enemy.speed += self.enemy_speed_increase
             else:
@@ -239,12 +256,14 @@ class Game:
 
         for enemy in self.enemies:
             for bullet in enemy.bullets[:]:
-                if bullet.colliderect(self.player.rect):
-                    enemy.bullets.remove(bullet)
-                    self.player.lives -= 1
-                    if self.player.lives <= 0:
-                        self.game_over = True
-                    break
+                for shield in self.shields:
+                    if bullet.rect.colliderect(shield.rect):
+                        enemy.bullets.remove(bullet)
+                        shield.take_damage()
+                        if shield.is_destroyed():
+                            self.shields.remove(shield)
+                        break
+
 
     def draw_button(self, text, x, y, w=250, h=60, 
                     bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0), 
@@ -308,6 +327,15 @@ class Game:
         pygame.quit()
         sys.exit()
 
+    def create_shields(self):
+        self.shields = []
+        shield_y = self.screen_height - 150
+        spacing = self.screen_width // 4
+        for i in range(3):
+            shield_x = spacing * i + spacing // 2 - 30
+            self.shields.append(Shield(shield_x, shield_y))
+
+
     def draw_game_over_menu(self):
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(200)
@@ -341,6 +369,20 @@ class Game:
                 satellite.draw(self.screen)
 
         self.player.draw(self.screen)
+
+        # Barra de vida para el jefe final en nivel 3
+        for enemy in self.enemies:
+            if isinstance(enemy, FinalBoss):
+                health_bar_width = enemy.rect.width
+                health_bar_height = 10
+                health_ratio = max(enemy.lives / 15, 0)  # 15 es vida total del jefe
+                # Fondo rojo de la barra
+                pygame.draw.rect(self.screen, (255, 0, 0), (enemy.rect.x, enemy.rect.y - 15, health_bar_width, health_bar_height))
+                # Barra verde que representa la vida actual
+                health_bar = pygame.Rect(enemy.rect.x, enemy.rect.y - 15, int(health_bar_width * health_ratio), health_bar_height)
+                pygame.draw.rect(self.screen, (0, 255, 0), health_bar)
+
+        # Dibujar todos los enemigos (incluyendo jefe)
         for enemy in self.enemies:
             enemy.draw(self.screen)
 
@@ -349,13 +391,19 @@ class Game:
 
         for enemy in self.enemies:
             for bullet in enemy.bullets:
-                pygame.draw.rect(self.screen, (255, 0, 0), bullet)
+                if hasattr(bullet, "draw"):
+                    bullet.draw(self.screen)
+                else:
+                    pygame.draw.rect(self.screen, (255, 0, 0), bullet)  # fallback
 
         lives_text = self.font.render(f"Vidas: {self.player.lives}", True, (255, 255, 255))
         score_text = self.font.render(f"Puntaje: {self.score}", True, (255, 255, 255))
         self.screen.blit(lives_text, (10, 10))
         self.screen.blit(score_text, (self.screen_width - score_text.get_width() - 10, 10))
 
+        for shield in self.shields:
+            shield.draw(self.screen)
+            
         if self.paused:
             self.draw_pause_menu()
         if self.game_over:

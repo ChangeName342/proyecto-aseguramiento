@@ -53,6 +53,14 @@ class Game:
         self.pause_buttons = []
         self.game_over_buttons = []
 
+        # Para menú de victoria
+        self.victory = False
+        self.victory_buttons = []
+
+        # Ruta para archivo de guardado
+        base_path = os.path.dirname(__file__)
+        self.save_path = os.path.join(base_path, '..', 'savegame.txt')
+
     def load_level_background(self):
         if 1 <= self.current_level <= self.max_levels:
             base_path = os.path.dirname(__file__)
@@ -81,14 +89,13 @@ class Game:
             for i in range(12):
                 x = 100 + (i % 6) * 90
                 y = 50 + (i // 6) * 75
-                enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)  # Nivel pasado correctamente
+                enemy = BasicEnemy(x, y, bullet_speed, level=self.current_level)
                 enemy.speed = base_enemy_speed
                 self.enemies.append(enemy)
 
         elif self.current_level == 2:
             positions = []
 
-            # Fila 1
             y1 = 60
             count1 = random.randint(4, 8)
             spacing1 = (self.screen_width - 100) // (count1 + 1)
@@ -96,7 +103,6 @@ class Game:
                 x = 50 + (i + 1) * spacing1
                 positions.append((x, y1))
 
-            # Fila 2
             y2 = 150
             count2 = 12 - count1
             spacing2 = (self.screen_width - 100) // (count2 + 1)
@@ -115,7 +121,6 @@ class Game:
                 self.enemies.append(enemy)
 
         elif self.current_level == 3:
-           
             x = self.screen_width // 2 - 45  
             y = 50
             boss = FinalBoss(x, y, bullet_speed)
@@ -124,12 +129,13 @@ class Game:
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                self.delete_save()
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and not self.game_over and not self.paused:
+                if event.key == pygame.K_SPACE and not self.game_over and not self.paused and not self.victory:
                     self.player.shoot()
-                if event.key == pygame.K_ESCAPE and not self.game_over:
+                if event.key == pygame.K_ESCAPE and not self.game_over and not self.victory:
                     if self.paused and self.pause_menu_state == "options":
                         self.pause_menu_state = "main"
                     else:
@@ -137,7 +143,7 @@ class Game:
                         self.pause_menu_state = "main"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
-                if self.paused and not self.game_over:
+                if self.paused and not self.game_over and not self.victory:
                     for i, btn_rect in enumerate(self.pause_buttons):
                         if btn_rect.collidepoint(mouse_pos):
                             if self.pause_menu_state == "main":
@@ -156,14 +162,26 @@ class Game:
                     for i, btn_rect in enumerate(self.game_over_buttons):
                         if btn_rect.collidepoint(mouse_pos):
                             if i == 0:
+                                self.delete_save()
                                 self.__init__()
                             elif i == 1:
+                                self.delete_save()
                                 self.go_to_menu()
                             elif i == 2:
+                                self.delete_save()
+                                self.quit_game()
+                elif self.victory:
+                    for i, btn_rect in enumerate(self.victory_buttons):
+                        if btn_rect.collidepoint(mouse_pos):
+                            if i == 0:
+                                self.delete_save()
+                                self.go_to_menu()
+                            elif i == 1:
+                                self.delete_save()
                                 self.quit_game()
 
     def update(self):
-        if self.game_over or self.paused:
+        if self.game_over or self.paused or self.victory:
             return
 
         keys = pygame.key.get_pressed()
@@ -220,10 +238,12 @@ class Game:
         else:
             self.satellites = []
 
+        # Revisar si se eliminaron todos los enemigos para pasar de nivel
         if not self.enemies:
             self.current_level += 1
             if self.current_level <= self.max_levels:
                 print(f"¡Pasando al Nivel {self.current_level}!")
+                self.save_progress()  # Guardar progreso al pasar nivel
                 self.load_level_background()
                 self.create_enemies()
                 if self.current_level in [2, 3]:
@@ -232,11 +252,14 @@ class Game:
                     enemy.speed += self.enemy_speed_increase
             else:
                 print("¡Has completado todos los niveles!")
-                self.game_over = True
+                self.delete_save()  # Borrar progreso al ganar
+                self.victory = True
 
+        # Si algún enemigo toca al jugador, fin del juego
         for enemy in self.enemies:
             if enemy.rect.bottom >= self.player.rect.top:
                 self.game_over = True
+                self.delete_save()  # Borrar progreso al perder
                 break
 
     def check_collisions(self):
@@ -264,6 +287,16 @@ class Game:
                             self.shields.remove(shield)
                         break
 
+        # Colisión balas enemigas con jugador
+        for enemy in self.enemies:
+            for bullet in enemy.bullets[:]:
+                if bullet.rect.colliderect(self.player.rect) and self.player.damage_timer == 0:
+                    enemy.bullets.remove(bullet)
+                    self.player.take_damage()
+                    if self.player.lives <= 0:
+                        self.game_over = True
+                        self.delete_save()
+                    break
 
     def draw_button(self, text, x, y, w=250, h=60, 
                     bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0), 
@@ -335,7 +368,6 @@ class Game:
             shield_x = spacing * i + spacing // 2 - 30
             self.shields.append(Shield(shield_x, shield_y))
 
-
     def draw_game_over_menu(self):
         overlay = pygame.Surface((self.screen_width, self.screen_height))
         overlay.set_alpha(200)
@@ -353,6 +385,23 @@ class Game:
         quit_btn = self.draw_button("Salir", self.screen_width // 2, 460)
 
         self.game_over_buttons = [restart_btn, menu_btn, quit_btn]
+
+    def draw_victory_menu(self):
+        overlay = pygame.Surface((self.screen_width, self.screen_height))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+
+        title = self.title_font.render("¡VICTORIA!", True, (0, 255, 0))
+        self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 100))
+
+        msg_text = self.font.render("¡Salvaste el planeta!", True, (255, 255, 255))
+        self.screen.blit(msg_text, (self.screen_width // 2 - msg_text.get_width() // 2, 180))
+
+        menu_btn = self.draw_button("Menú principal", self.screen_width // 2, 300)
+        quit_btn = self.draw_button("Salir", self.screen_width // 2, 380)
+
+        self.victory_buttons = [menu_btn, quit_btn]
 
     def draw(self):
         if self.level_background:
@@ -376,13 +425,10 @@ class Game:
                 health_bar_width = enemy.rect.width
                 health_bar_height = 10
                 health_ratio = max(enemy.lives / 15, 0)  # 15 es vida total del jefe
-                # Fondo rojo de la barra
                 pygame.draw.rect(self.screen, (255, 0, 0), (enemy.rect.x, enemy.rect.y - 15, health_bar_width, health_bar_height))
-                # Barra verde que representa la vida actual
                 health_bar = pygame.Rect(enemy.rect.x, enemy.rect.y - 15, int(health_bar_width * health_ratio), health_bar_height)
                 pygame.draw.rect(self.screen, (0, 255, 0), health_bar)
 
-        # Dibujar todos los enemigos (incluyendo jefe)
         for enemy in self.enemies:
             enemy.draw(self.screen)
 
@@ -394,7 +440,7 @@ class Game:
                 if hasattr(bullet, "draw"):
                     bullet.draw(self.screen)
                 else:
-                    pygame.draw.rect(self.screen, (255, 0, 0), bullet)  # fallback
+                    pygame.draw.rect(self.screen, (255, 0, 0), bullet)
 
         lives_text = self.font.render(f"Vidas: {self.player.lives}", True, (255, 255, 255))
         score_text = self.font.render(f"Puntaje: {self.score}", True, (255, 255, 255))
@@ -403,17 +449,36 @@ class Game:
 
         for shield in self.shields:
             shield.draw(self.screen)
-            
+
         if self.paused:
             self.draw_pause_menu()
         if self.game_over:
             self.draw_game_over_menu()
+        if self.victory:
+            self.draw_victory_menu()
 
-        pygame.display.flip()
+    def save_progress(self):
+        try:
+            with open(self.save_path, 'w') as f:
+                f.write(str(self.current_level))
+            print(f"Progreso guardado: Nivel {self.current_level}")
+        except Exception as e:
+            print(f"Error guardando progreso: {e}")
+
+    def delete_save(self):
+        try:
+            if os.path.exists(self.save_path):
+                os.remove(self.save_path)
+                print("Progreso eliminado")
+        except Exception as e:
+            print(f"Error eliminando progreso: {e}")
 
     def run(self):
         while True:
+            self.clock.tick(self.fps)
             self.handle_events()
             self.update()
             self.draw()
-            self.clock.tick(self.fps)
+            pygame.display.flip()
+
+

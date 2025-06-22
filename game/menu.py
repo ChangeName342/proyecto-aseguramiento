@@ -31,6 +31,22 @@ class Menu:
         pygame.mixer.init()
         pygame.mixer.music.set_volume(self.volume)
 
+        # Cargar progreso guardado (nivel)
+        self.saved_level = self.load_progress()
+
+    def load_progress(self):
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        save_path = os.path.join(base_path, 'savegame.txt')
+        if os.path.exists(save_path):
+            try:
+                with open(save_path, 'r') as f:
+                    level = int(f.read())
+                    if 1 <= level <= 3:
+                        return level
+            except Exception:
+                pass
+        return None
+
     def draw_button(self, text, x, y, font, mouse_pos, w=250, h=60,
                     bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0),
                     hover_bg_color=(0, 100, 255), hover_text_color=(255, 255, 0)):
@@ -70,27 +86,43 @@ class Menu:
         mouse_pos = pygame.mouse.get_pos()
 
         if self.state == "menu":
-            play_button = self.draw_button("Iniciar Juego", 400, 250, self.font, mouse_pos)
-            options_button = self.draw_button("Opciones", 400, 330, self.font, mouse_pos)
-            quit_button = self.draw_button("Salir", 400, 410, self.font, mouse_pos)
-            return play_button, options_button, quit_button
+            buttons = []
+
+            # Si hay progreso guardado, dibujar botón "Continuar"
+            if self.saved_level is not None:
+                continue_button = self.draw_button("Continuar", 400, 220, self.font, mouse_pos)
+                buttons.append(('continuar', continue_button))
+
+            # Ajustar posiciones de otros botones
+            y_start = 300 if self.saved_level is not None else 260
+            play_button = self.draw_button("Iniciar Juego", 400, y_start, self.font, mouse_pos)
+            options_button = self.draw_button("Opciones", 400, y_start + 80, self.font, mouse_pos)
+            quit_button = self.draw_button("Salir", 400, y_start + 160, self.font, mouse_pos)
+
+            buttons.extend([
+                ('iniciar', play_button),
+                ('opciones', options_button),
+                ('salir', quit_button)
+            ])
+
+            return buttons
 
         elif self.state == "options":
             self.draw_text("Opciones", 400, 180, self.font)
             sound_button = self.draw_button("Sonido", 400, 260, self.small_font, mouse_pos, w=200, h=50)
             controls_button = self.draw_button("Controles", 400, 330, self.small_font, mouse_pos, w=200, h=50)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return sound_button, controls_button, back_button
+            return [('sonido', sound_button), ('controles', controls_button), ('volver', back_button)]
 
         elif self.state == "sound":
             self.draw_text("Ajustes de Sonido (pendiente)", 400, 250, self.small_font)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return (back_button,)
+            return [('volver', back_button)]
 
         elif self.state == "controls":
             self.draw_text("Controles (pendiente)", 400, 250, self.small_font)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return (back_button,)
+            return [('volver', back_button)]
 
     def run(self):
         """Bucle principal del menú que maneja eventos y cambia de estado."""
@@ -108,26 +140,42 @@ class Menu:
                     mouse_pos = pygame.mouse.get_pos()
 
                     if self.state == "menu":
-                        if buttons[0].collidepoint(mouse_pos):  # Iniciar juego
-                            from game import Game
-                            game = Game()
-                            game.run()
-                        elif buttons[1].collidepoint(mouse_pos):  # Opciones
-                            self.state = "options"
-                        elif buttons[2].collidepoint(mouse_pos):  # Salir
-                            pygame.quit()
-                            sys.exit()
+                        for name, btn_rect in buttons:
+                            if btn_rect.collidepoint(mouse_pos):
+                                if name == 'continuar':
+                                    from game import Game
+                                    game = Game()
+                                    game.current_level = self.saved_level
+                                    game.load_level_background()
+                                    game.create_enemies()
+                                    if self.saved_level in [2, 3]:
+                                        game.create_shields()
+                                    game.run()
+                                elif name == 'iniciar':
+                                    from game import Game
+                                    game = Game()
+                                    game.run()
+                                elif name == 'opciones':
+                                    self.state = "options"
+                                elif name == 'salir':
+                                    pygame.quit()
+                                    sys.exit()
 
                     elif self.state == "options":
-                        if buttons[0].collidepoint(mouse_pos):  # Sonido
-                            self.state = "sound"
-                        elif buttons[1].collidepoint(mouse_pos):  # Controles
-                            self.state = "controls"
-                        elif buttons[2].collidepoint(mouse_pos):  # Volver
-                            self.state = "menu"
+                        for name, btn_rect in buttons:
+                            if btn_rect.collidepoint(mouse_pos):
+                                if name == 'sonido':
+                                    self.state = "sound"
+                                elif name == 'controles':
+                                    self.state = "controls"
+                                elif name == 'volver':
+                                    self.state = "menu"
 
                     elif self.state in ("sound", "controls"):
-                        if buttons[0].collidepoint(mouse_pos):  # Volver desde submenú
-                            self.state = "options"
+                        for name, btn_rect in buttons:
+                            if btn_rect.collidepoint(mouse_pos):
+                                if name == 'volver':
+                                    self.state = "options"
+
 
 

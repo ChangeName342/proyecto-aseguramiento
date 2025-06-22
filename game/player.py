@@ -1,13 +1,23 @@
 import pygame
 import os
+import sys
+
+def resource_path(relative_path):
+    """Obtiene la ruta absoluta al recurso, útil para PyInstaller."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class Player:
     def __init__(self, x, y):
-        try:
-            base_path = os.path.dirname(__file__)
-            image_path = os.path.join(base_path, '..', 'images', 'nave.png')
-            image_path = os.path.abspath(image_path)
+        images_dir = resource_path('images')
+        sounds_dir = resource_path('sounds')
 
+        # Cargar imagen
+        try:
+            image_path = os.path.join(images_dir, 'nave.png')
             print(f"Intentando cargar imagen desde: {image_path}")
             self.image = pygame.image.load(image_path).convert_alpha()
             self.image = pygame.transform.scale(self.image, (50, 40))
@@ -16,47 +26,33 @@ class Player:
             self.image = pygame.Surface((50, 40))
             self.image.fill((0, 255, 0))
 
-        self.rect = self.image.get_rect()
-        self.rect.x = x
-        self.rect.y = y
+        self.rect = self.image.get_rect(topleft=(x, y))
 
         self.speed = 5
-        self.lives = 5  # aumentadas vidas
+        self.lives = 5
 
         self.bullets = []
         self.bullet_speed = 7
         self.cooldown = 0
 
-        # Para animación de daño
-        self.damage_timer = 0  # cuenta frames para animación daño
-        self.damage_duration = 15  # duración animación en frames
+        # Animación daño
+        self.damage_timer = 0
+        self.damage_duration = 15
 
-        # Inicializar sonido disparo
-        try:
-            sonido_path = os.path.join(base_path, '..', 'sounds', 'disparo_protagonista.mp3')
-            self.shoot_sound = pygame.mixer.Sound(sonido_path)
-            self.shoot_sound.set_volume(0.3)
-        except Exception as e:
-            print(f"Error cargando sonido de disparo: {e}")
-            self.shoot_sound = None
+        # Cargar sonidos
+        def load_sound(filename, volume):
+            try:
+                path = os.path.join(sounds_dir, filename)
+                sound = pygame.mixer.Sound(path)
+                sound.set_volume(volume)
+                return sound
+            except Exception as e:
+                print(f"Error cargando sonido {filename}: {e}")
+                return None
 
-         # Inicializar sonido de daño recibido
-        try:
-            daño_path = os.path.join(base_path, '..', 'sounds', 'daño_recibido_prota.mp3')
-            self.damage_sound = pygame.mixer.Sound(daño_path)
-            self.damage_sound.set_volume(0.5)
-        except Exception as e:
-            print(f"Error cargando sonido de daño recibido: {e}")
-            self.damage_sound = None
-        
-         # Inicializar sonido de muerte
-        try:
-            muerte_path = os.path.join(base_path, '..', 'sounds', 'sonido_muerte_prota.mp3')
-            self.death_sound = pygame.mixer.Sound(muerte_path)
-            self.death_sound.set_volume(0.7)
-        except Exception as e:
-            print(f"Error cargando sonido de muerte: {e}")
-            self.death_sound = None
+        self.shoot_sound = load_sound('disparo_protagonista.mp3', 0.3)
+        self.damage_sound = load_sound('daño_recibido_prota.mp3', 0.5)
+        self.death_sound = load_sound('sonido_muerte_prota.mp3', 0.7)
 
     def move(self, direction, screen_width):
         if direction == "left" and self.rect.left > 0:
@@ -85,9 +81,8 @@ class Player:
             self.damage_timer -= 1
 
     def take_damage(self):
-        """Llamar cuando el jugador recibe daño."""
         self.lives -= 1
-        self.damage_timer = self.damage_duration  # activar animación daño
+        self.damage_timer = self.damage_duration
         if self.damage_sound:
             self.damage_sound.play()
         if self.lives <= 0:
@@ -95,9 +90,7 @@ class Player:
                 self.death_sound.play()
 
     def draw(self, screen):
-        # Si está en daño, dibujar con tintado rojo y parpadeo simple
         if self.damage_timer > 0:
-            # Parpadeo: solo dibuja si damage_timer es par
             if self.damage_timer % 2 == 0:
                 tint_surf = self.image.copy()
                 tint_surf.fill((255, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)
@@ -111,8 +104,7 @@ class Player:
             screen.blit(glow_surface, (bullet.centerx - 6, bullet.centery - 12))
             pygame.draw.rect(screen, (255, 0, 255), bullet)
             pygame.draw.rect(screen, (255, 255, 255), bullet, 1)
-       
-        
+
 
 
 

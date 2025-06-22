@@ -3,6 +3,14 @@ import sys
 import os
 import gif_pygame
 
+def resource_path(relative_path):
+    """Devuelve la ruta absoluta del recurso, funcionará bien dentro y fuera del exe."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 class Menu:
     def __init__(self):
         pygame.init()
@@ -11,10 +19,11 @@ class Menu:
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption("Menú Principal - Invasión Espacial")
 
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        gif_path = os.path.join(BASE_DIR, 'images', 'fondo_menu.gif')
+        gif_path = resource_path(os.path.join('images', 'fondo_menu.gif'))
         self.background_gif = gif_pygame.load(gif_path)
-        self.title = pygame.image.load(os.path.join(BASE_DIR, 'images', 'titulo.png')).convert_alpha()
+
+        title_path = resource_path(os.path.join('images', 'titulo.png'))
+        self.title = pygame.image.load(title_path).convert_alpha()
 
         self.font = pygame.font.SysFont(None, 40)
         self.small_font = pygame.font.SysFont(None, 30)
@@ -26,7 +35,7 @@ class Menu:
         # Música de fondo
         try:
             pygame.mixer.init()
-            music_path = os.path.join(BASE_DIR, 'sounds', 'menu_principal.mp3')
+            music_path = resource_path(os.path.join('sounds', 'menu_principal.mp3'))
             pygame.mixer.music.load(music_path)
             pygame.mixer.music.set_volume(self.volume)
             pygame.mixer.music.play(-1)
@@ -35,7 +44,7 @@ class Menu:
 
         # Sonido al pasar el mouse por botones
         try:
-            hover_sound_path = os.path.join(BASE_DIR, 'sounds', 'seleccionar_menu.mp3')
+            hover_sound_path = resource_path(os.path.join('sounds', 'seleccionar_menu.mp3'))
             self.hover_sound = pygame.mixer.Sound(hover_sound_path)
             self.hover_sound.set_volume(0.5)
         except Exception as e:
@@ -44,7 +53,7 @@ class Menu:
 
         # Sonido al hacer clic en un botón
         try:
-            click_sound_path = os.path.join(BASE_DIR, 'sounds', 'eleccion_menu.mp3')
+            click_sound_path = resource_path(os.path.join('sounds', 'eleccion_menu.mp3'))
             self.click_sound = pygame.mixer.Sound(click_sound_path)
             self.click_sound.set_volume(0.5)
         except Exception as e:
@@ -155,7 +164,7 @@ class Menu:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     mouse_pos = pygame.mouse.get_pos()
                     button_offset = 1 if self.saved_level is not None else 0
-                
+
                     if self.state == "menu":
                         if self.saved_level is not None and buttons[0].collidepoint(mouse_pos):
                             if self.click_sound:
@@ -170,7 +179,7 @@ class Menu:
                                 game.create_shields()
                             game.run()
                             continue
-                        
+
                         if buttons[button_offset].collidepoint(mouse_pos):
                             if self.click_sound:
                                 self.click_sound.play()
@@ -187,7 +196,6 @@ class Menu:
                                 self.click_sound.play()
                             pygame.quit()
                             sys.exit()
-                
 
                     elif self.state == "options":
                         if buttons[0].collidepoint(mouse_pos):
@@ -200,7 +208,6 @@ class Menu:
                     elif self.state in ("sound", "controls"):
                         if buttons[0].collidepoint(mouse_pos):
                             self.state = "options"
-
 
 
 

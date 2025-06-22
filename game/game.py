@@ -1,12 +1,20 @@
 import pygame
 import sys
 import os
-import random 
+import random
 from player import Player
 from enemy import BasicEnemy, StrongEnemy, FinalBoss
-from cloud import Cloud 
+from cloud import Cloud
 from satellite import Satellite
 from shield import Shield
+
+def resource_path(relative_path):
+    """ Devuelve la ruta absoluta del recurso, funciona dentro y fuera del .exe """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class Game:
     def __init__(self):
@@ -53,75 +61,64 @@ class Game:
         self.pause_buttons = []
         self.game_over_buttons = []
 
-        # Para menú de victoria
         self.victory = False
         self.victory_buttons = []
 
         # Ruta para archivo de guardado
-        base_path = os.path.dirname(__file__)
-        self.save_path = os.path.join(base_path, '..', 'savegame.txt')
+        self.save_path = resource_path("savegame.txt")
 
-         # Inicializar mixer y cargar sonido de clic
+        # Inicializar mixer y cargar sonidos con resource_path
         try:
             pygame.mixer.init()
-            click_sound_path = os.path.join(base_path, '..', 'sounds', 'eleccion_menu.mp3')
+            click_sound_path = resource_path(os.path.join('sounds', 'eleccion_menu.mp3'))
             self.click_sound = pygame.mixer.Sound(click_sound_path)
             self.click_sound.set_volume(0.5)
         except Exception as e:
             print(f"Error cargando sonido de elección de menú: {e}")
             self.click_sound = None
 
-        # Sonido de pasar mouse sobre botones del menú de pausa
         self.hover_sound = None
         self.hovered_pause_buttons = set()
         try:
-            base_path = os.path.dirname(__file__)
-            hover_sound_path = os.path.join(base_path, '..', 'sounds', 'seleccionar_menu.mp3')
+            hover_sound_path = resource_path(os.path.join('sounds', 'seleccionar_menu.mp3'))
             self.hover_sound = pygame.mixer.Sound(hover_sound_path)
             self.hover_sound.set_volume(0.5)
-        except Exception as e:  
+        except Exception as e:
             print(f"Error cargando sonido de selección de pausa: {e}")
 
         try:
-            base_path = os.path.dirname(__file__)
-            musica_victoria_path = os.path.join(base_path, '..', 'sounds', 'musica_victoria.mp3')
+            musica_victoria_path = resource_path(os.path.join('sounds', 'musica_victoria.mp3'))
             self.musica_victoria = pygame.mixer.Sound(musica_victoria_path)
             self.musica_victoria.set_volume(0.7)
         except Exception as e:
-            print(f"Error cargando musica de victoria: {e}")
+            print(f"Error cargando música de victoria: {e}")
             self.musica_victoria = None
 
-        # Reproducir la música del nivel actual al iniciar
         self.play_level_music()
 
     def play_level_music(self):
-        base_path = os.path.dirname(__file__)
         try:
-            pygame.mixer.music.stop()  # Detener música anterior
+            pygame.mixer.music.stop()
             if self.current_level == 1:
-                music_path = os.path.join(base_path, '..', 'sounds', 'musica_nivel1.mp3')
+                music_path = resource_path(os.path.join('sounds', 'musica_nivel1.mp3'))
             elif self.current_level == 2:
-                music_path = os.path.join(base_path, '..', 'sounds', 'musica_nivel2.mp3')
+                music_path = resource_path(os.path.join('sounds', 'musica_nivel2.mp3'))
             elif self.current_level == 3:
-                music_path = os.path.join(base_path, '..', 'sounds', 'musica_jefe_final.mp3')
+                music_path = resource_path(os.path.join('sounds', 'musica_jefe_final.mp3'))
             else:
-                return  # No reproducir música para otros niveles
+                return
 
             pygame.mixer.music.load(music_path)
             pygame.mixer.music.set_volume(0.5)
-            pygame.mixer.music.play(-1)  # Loop infinito
+            pygame.mixer.music.play(-1)
         except Exception as e:
             print(f"Error cargando música de nivel: {e}")
 
     def load_level_background(self):
         if 1 <= self.current_level <= self.max_levels:
-            base_path = os.path.dirname(__file__)
             image_name = f'lvl{self.current_level}.png'
-            image_path = os.path.join(base_path, '..', 'images', image_name)
-            image_path = os.path.abspath(image_path)
-
+            image_path = resource_path(os.path.join('images', image_name))
             print(f"Cargando fondo del nivel {self.current_level} desde: {image_path}")
-
             try:
                 self.level_background = pygame.image.load(image_path).convert()
                 self.level_background = pygame.transform.scale(self.level_background, (self.screen_width, self.screen_height))
@@ -288,7 +285,8 @@ class Game:
             if self.satellite_spawn_timer >= self.next_satellite_spawn_interval:
                 self.satellites.append(Satellite(self.screen_width, self.screen_height))
                 self.satellite_spawn_timer = 0
-                self.next_satellite_spawn_interval = random.randint(self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
+                self.next_satellite_spawn_interval = random.randint(
+                    self.satellite_spawn_interval_min, self.satellite_spawn_interval_max)
             for satellite in self.satellites[:]:
                 satellite.update()
                 if satellite.is_offscreen(self.screen_width):
@@ -296,31 +294,27 @@ class Game:
         else:
             self.satellites = []
 
-        # Revisar si se eliminaron todos los enemigos para pasar de nivel
         if not self.enemies:
             self.current_level += 1
             if self.current_level <= self.max_levels:
                 print(f"¡Pasando al Nivel {self.current_level}!")
-                self.save_progress()  # Guardar progreso al pasar nivel
+                self.save_progress()
                 self.load_level_background()
                 self.create_enemies()
                 if self.current_level in [2, 3]:
                     self.create_shields()
                 for enemy in self.enemies:
                     enemy.speed += self.enemy_speed_increase
-
-                # Reproducir música del nuevo nivel
                 self.play_level_music()
             else:
                 print("¡Has completado todos los niveles!")
-                self.delete_save()  # Borrar progreso al ganar
+                self.delete_save()
                 self.victory = True
 
-        # Si algún enemigo toca al jugador, fin del juego
         for enemy in self.enemies:
             if enemy.rect.bottom >= self.player.rect.top:
                 self.game_over = True
-                self.delete_save()  # Borrar progreso al perder
+                self.delete_save()
                 break
 
     def check_collisions(self):
@@ -334,7 +328,6 @@ class Game:
                         if enemy.dead:
                             self.enemies.remove(enemy)
                             self.score += 10
-                           
                             if isinstance(enemy, FinalBoss) and self.current_level == 3:
                                 self.victory = True
                                 if self.musica_victoria:
@@ -351,7 +344,6 @@ class Game:
                             self.shields.remove(shield)
                         break
 
-        # Colisión balas enemigas con jugador
         for enemy in self.enemies:
             for bullet in enemy.bullets[:]:
                 if bullet.rect.colliderect(self.player.rect) and self.player.damage_timer == 0:
@@ -362,8 +354,8 @@ class Game:
                         self.delete_save()
                     break
 
-    def draw_button(self, text, x, y, w=250, h=60, 
-                    bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0), 
+    def draw_button(self, text, x, y, w=250, h=60,
+                    bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0),
                     hover_bg_color=(0, 100, 255), hover_text_color=(255, 255, 0)):
         rect = pygame.Rect(0, 0, w, h)
         rect.center = (x, y)
@@ -371,7 +363,6 @@ class Game:
         mouse_pos = pygame.mouse.get_pos()
         hovered = rect.collidepoint(mouse_pos)
 
-        # Sonido de hover
         if hovered and text not in self.hovered_pause_buttons:
             self.hovered_pause_buttons.add(text)
             if self.hover_sound:
@@ -379,24 +370,9 @@ class Game:
         elif not hovered:
             self.hovered_pause_buttons.discard(text)
 
-        if hovered:
-            pygame.draw.rect(self.screen, hover_bg_color, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
-            rendered_text = self.font.render(text, True, hover_text_color)
-        else:
-            pygame.draw.rect(self.screen, bg_color, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
-            rendered_text = self.font.render(text, True, text_color)
-
-        if rect.collidepoint(mouse_pos):
-            pygame.draw.rect(self.screen, hover_bg_color, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
-            rendered_text = self.font.render(text, True, hover_text_color)
-        else:
-            pygame.draw.rect(self.screen, bg_color, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
-            rendered_text = self.font.render(text, True, text_color)
-
+        pygame.draw.rect(self.screen, hover_bg_color if hovered else bg_color, rect, border_radius=8)
+        pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
+        rendered_text = self.font.render(text, True, hover_text_color if hovered else text_color)
         text_rect = rendered_text.get_rect(center=rect.center)
         self.screen.blit(rendered_text, text_rect)
 
@@ -412,17 +388,18 @@ class Game:
         self.screen.blit(title, (self.screen_width // 2 - title.get_width() // 2, 80))
 
         if self.pause_menu_state == "main":
-            continue_btn = self.draw_button("Continuar", self.screen_width//2, 250, 250, 60)
-            options_btn = self.draw_button("Opciones", self.screen_width//2, 330, 250, 60)
-            menu_btn = self.draw_button("Menú principal", self.screen_width//2, 410, 250, 60)
-            quit_btn = self.draw_button("Salir", self.screen_width//2, 490, 250, 60)
-            self.pause_buttons = [continue_btn, options_btn, menu_btn, quit_btn]
-
+            self.pause_buttons = [
+                self.draw_button("Continuar", self.screen_width // 2, 250),
+                self.draw_button("Opciones", self.screen_width // 2, 330),
+                self.draw_button("Menú principal", self.screen_width // 2, 410),
+                self.draw_button("Salir", self.screen_width // 2, 490)
+            ]
         elif self.pause_menu_state == "options":
-            controls_btn = self.draw_button("Controles", self.screen_width//2, 270, 250, 60)
-            sound_btn = self.draw_button("Sonido", self.screen_width//2, 350, 250, 60)
-            back_btn = self.draw_button("Volver", self.screen_width//2, 430, 250, 60)
-            self.pause_buttons = [controls_btn, sound_btn, back_btn]
+            self.pause_buttons = [
+                self.draw_button("Controles", self.screen_width // 2, 270),
+                self.draw_button("Sonido", self.screen_width // 2, 350),
+                self.draw_button("Volver", self.screen_width // 2, 430)
+            ]
 
     def resume_game(self):
         self.paused = False
@@ -462,11 +439,11 @@ class Game:
         score_text = self.font.render(f"Puntaje: {self.score}", True, (255, 255, 255))
         self.screen.blit(score_text, (self.screen_width // 2 - score_text.get_width() // 2, 180))
 
-        restart_btn = self.draw_button("Reiniciar", self.screen_width // 2, 300)
-        menu_btn = self.draw_button("Menú principal", self.screen_width // 2, 380)
-        quit_btn = self.draw_button("Salir", self.screen_width // 2, 460)
-
-        self.game_over_buttons = [restart_btn, menu_btn, quit_btn]
+        self.game_over_buttons = [
+            self.draw_button("Reiniciar", self.screen_width // 2, 300),
+            self.draw_button("Menú principal", self.screen_width // 2, 380),
+            self.draw_button("Salir", self.screen_width // 2, 460)
+        ]
 
     def draw_victory_menu(self):
         overlay = pygame.Surface((self.screen_width, self.screen_height))
@@ -480,16 +457,13 @@ class Game:
         msg_text = self.font.render("¡Salvaste el planeta!", True, (255, 255, 255))
         self.screen.blit(msg_text, (self.screen_width // 2 - msg_text.get_width() // 2, 180))
 
-        menu_btn = self.draw_button("Menú principal", self.screen_width // 2, 300)
-        quit_btn = self.draw_button("Salir", self.screen_width // 2, 380)
-
-        self.victory_buttons = [menu_btn, quit_btn]
+        self.victory_buttons = [
+            self.draw_button("Menú principal", self.screen_width // 2, 300),
+            self.draw_button("Salir", self.screen_width // 2, 380)
+        ]
 
     def draw(self):
-        if self.level_background:
-            self.screen.blit(self.level_background, (0, 0))
-        else:
-            self.screen.fill((0, 0, 0))
+        self.screen.blit(self.level_background, (0, 0)) if self.level_background else self.screen.fill((0, 0, 0))
 
         if self.current_level == 2:
             for cloud in self.clouds:
@@ -501,15 +475,11 @@ class Game:
 
         self.player.draw(self.screen)
 
-        # Barra de vida para el jefe final en nivel 3
         for enemy in self.enemies:
             if isinstance(enemy, FinalBoss):
-                health_bar_width = enemy.rect.width
-                health_bar_height = 10
-                health_ratio = max(enemy.lives / 15, 0)  # 15 es vida total del jefe
-                pygame.draw.rect(self.screen, (255, 0, 0), (enemy.rect.x, enemy.rect.y - 15, health_bar_width, health_bar_height))
-                health_bar = pygame.Rect(enemy.rect.x, enemy.rect.y - 15, int(health_bar_width * health_ratio), health_bar_height)
-                pygame.draw.rect(self.screen, (0, 255, 0), health_bar)
+                health_ratio = max(enemy.lives / 15, 0)
+                pygame.draw.rect(self.screen, (255, 0, 0), (enemy.rect.x, enemy.rect.y - 15, enemy.rect.width, 10))
+                pygame.draw.rect(self.screen, (0, 255, 0), (enemy.rect.x, enemy.rect.y - 15, int(enemy.rect.width * health_ratio), 10))
 
         for enemy in self.enemies:
             enemy.draw(self.screen)
@@ -524,9 +494,8 @@ class Game:
                 else:
                     pygame.draw.rect(self.screen, (255, 0, 0), bullet)
 
-        lives_text = self.font.render(f"Vidas: {self.player.lives}", True, (255, 255, 255))
+        self.screen.blit(self.font.render(f"Vidas: {self.player.lives}", True, (255, 255, 255)), (10, 10))
         score_text = self.font.render(f"Puntaje: {self.score}", True, (255, 255, 255))
-        self.screen.blit(lives_text, (10, 10))
         self.screen.blit(score_text, (self.screen_width - score_text.get_width() - 10, 10))
 
         for shield in self.shields:
@@ -562,5 +531,6 @@ class Game:
             self.update()
             self.draw()
             pygame.display.flip()
+
 
 

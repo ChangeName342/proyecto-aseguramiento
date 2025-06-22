@@ -1,5 +1,14 @@
 import pygame
 import os
+import sys
+
+def resource_path(relative_path):
+    """Obtiene la ruta absoluta al recurso, útil para PyInstaller."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class Shield:
     def __init__(self, x, y, width=60, height=30, life=4):
@@ -8,10 +17,9 @@ class Shield:
         self.life = life
         self.color = (255, 0, 0)
 
-         # Cargar sonido estructura destruida
+        # Cargar sonido estructura destruida
         try:
-            base_path = os.path.dirname(__file__)
-            sonido_path = os.path.join(base_path, '..', 'sounds', 'estructura_destruida.mp3')
+            sonido_path = resource_path(os.path.join('sounds', 'estructura_destruida.mp3'))
             self.destroy_sound = pygame.mixer.Sound(sonido_path)
             self.destroy_sound.set_volume(0.5)
         except Exception as e:

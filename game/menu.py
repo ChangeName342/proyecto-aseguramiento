@@ -11,27 +11,48 @@ class Menu:
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption("Menú Principal - Invasión Espacial")
 
-        # Ruta base para cargar recursos (GIF y título)
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         gif_path = os.path.join(BASE_DIR, 'images', 'fondo_menu.gif')
         self.background_gif = gif_pygame.load(gif_path)
         self.title = pygame.image.load(os.path.join(BASE_DIR, 'images', 'titulo.png')).convert_alpha()
 
-        # Fuentes para textos y botones
         self.font = pygame.font.SysFont(None, 40)
         self.small_font = pygame.font.SysFont(None, 30)
 
         self.clock = pygame.time.Clock()
-
-        # Estado actual del menú ("menu", "options", "sound", "controls")
         self.state = "menu"
-
-        # Control de volumen (pendiente implementación)
         self.volume = 0.5
-        pygame.mixer.init()
-        pygame.mixer.music.set_volume(self.volume)
 
-        # Cargar progreso guardado (nivel)
+        # Música de fondo
+        try:
+            pygame.mixer.init()
+            music_path = os.path.join(BASE_DIR, 'sounds', 'menu_principal.mp3')
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.set_volume(self.volume)
+            pygame.mixer.music.play(-1)
+        except Exception as e:
+            print(f"Error al cargar la música del menú: {e}")
+
+        # Sonido al pasar el mouse por botones
+        try:
+            hover_sound_path = os.path.join(BASE_DIR, 'sounds', 'seleccionar_menu.mp3')
+            self.hover_sound = pygame.mixer.Sound(hover_sound_path)
+            self.hover_sound.set_volume(0.5)
+        except Exception as e:
+            print(f"Error cargando sonido de selección de menú: {e}")
+            self.hover_sound = None
+
+        # Sonido al hacer clic en un botón
+        try:
+            click_sound_path = os.path.join(BASE_DIR, 'sounds', 'eleccion_menu.mp3')
+            self.click_sound = pygame.mixer.Sound(click_sound_path)
+            self.click_sound.set_volume(0.5)
+        except Exception as e:
+            print(f"Error cargando sonido de elección de menú: {e}")
+            self.click_sound = None
+
+        self.hovered_buttons = set()  # Para evitar repetir sonido
+
         self.saved_level = self.load_progress()
 
     def load_progress(self):
@@ -50,11 +71,19 @@ class Menu:
     def draw_button(self, text, x, y, font, mouse_pos, w=250, h=60,
                     bg_color=(0, 0, 255), text_color=(255, 255, 255), border_color=(0, 255, 0),
                     hover_bg_color=(0, 100, 255), hover_text_color=(255, 255, 0)):
-        """Dibuja un botón con efecto hover y retorna su rect para detectar clics."""
         rect = pygame.Rect(0, 0, w, h)
         rect.center = (x, y)
+        hovered = rect.collidepoint(mouse_pos)
 
-        if rect.collidepoint(mouse_pos):
+        # Reproducir sonido al pasar por primera vez
+        if hovered and text not in self.hovered_buttons:
+            self.hovered_buttons.add(text)
+            if self.hover_sound:
+                self.hover_sound.play()
+        elif not hovered:
+            self.hovered_buttons.discard(text)
+
+        if hovered:
             pygame.draw.rect(self.screen, hover_bg_color, rect, border_radius=8)
             pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
             rendered_text = font.render(text, True, hover_text_color)
@@ -68,43 +97,31 @@ class Menu:
         return rect
 
     def draw_text(self, text, x, y, font, color=(255, 255, 255)):
-        """Dibuja texto centrado en la pantalla."""
         text_surface = font.render(text, True, color)
         text_rect = text_surface.get_rect(center=(x, y))
         self.screen.blit(text_surface, text_rect)
 
     def draw_menu(self):
-        """Dibuja el fondo animado y los botones según el estado actual."""
-        # Fondo animado GIF escalado a la ventana
         frame_surface = self.background_gif.blit_ready()
         frame_surface = pygame.transform.scale(frame_surface, (self.screen_width, self.screen_height))
         self.screen.blit(frame_surface, (0, 0))
-
-        # Título centrado horizontalmente
         self.screen.blit(self.title, (self.screen_width // 2 - self.title.get_width() // 2, 80))
 
         mouse_pos = pygame.mouse.get_pos()
+        buttons = []
 
         if self.state == "menu":
-            buttons = []
-
-            # Si hay progreso guardado, dibujar botón "Continuar"
             if self.saved_level is not None:
-                continue_button = self.draw_button("Continuar", 400, 220, self.font, mouse_pos)
-                buttons.append(('continuar', continue_button))
+                continue_button = self.draw_button("Continuar", 400, 240, self.font, mouse_pos)
+                buttons.append(continue_button)
+                y_start = 320
+            else:
+                y_start = 260
 
-            # Ajustar posiciones de otros botones
-            y_start = 300 if self.saved_level is not None else 260
             play_button = self.draw_button("Iniciar Juego", 400, y_start, self.font, mouse_pos)
             options_button = self.draw_button("Opciones", 400, y_start + 80, self.font, mouse_pos)
             quit_button = self.draw_button("Salir", 400, y_start + 160, self.font, mouse_pos)
-
-            buttons.extend([
-                ('iniciar', play_button),
-                ('opciones', options_button),
-                ('salir', quit_button)
-            ])
-
+            buttons.extend([play_button, options_button, quit_button])
             return buttons
 
         elif self.state == "options":
@@ -112,20 +129,19 @@ class Menu:
             sound_button = self.draw_button("Sonido", 400, 260, self.small_font, mouse_pos, w=200, h=50)
             controls_button = self.draw_button("Controles", 400, 330, self.small_font, mouse_pos, w=200, h=50)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return [('sonido', sound_button), ('controles', controls_button), ('volver', back_button)]
+            return sound_button, controls_button, back_button
 
         elif self.state == "sound":
             self.draw_text("Ajustes de Sonido (pendiente)", 400, 250, self.small_font)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return [('volver', back_button)]
+            return (back_button,)
 
         elif self.state == "controls":
             self.draw_text("Controles (pendiente)", 400, 250, self.small_font)
             back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            return [('volver', back_button)]
+            return (back_button,)
 
     def run(self):
-        """Bucle principal del menú que maneja eventos y cambia de estado."""
         while True:
             self.clock.tick(60)
             buttons = self.draw_menu()
@@ -138,44 +154,54 @@ class Menu:
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     mouse_pos = pygame.mouse.get_pos()
-
+                    button_offset = 1 if self.saved_level is not None else 0
+                
                     if self.state == "menu":
-                        for name, btn_rect in buttons:
-                            if btn_rect.collidepoint(mouse_pos):
-                                if name == 'continuar':
-                                    from game import Game
-                                    game = Game()
-                                    game.current_level = self.saved_level
-                                    game.load_level_background()
-                                    game.create_enemies()
-                                    if self.saved_level in [2, 3]:
-                                        game.create_shields()
-                                    game.run()
-                                elif name == 'iniciar':
-                                    from game import Game
-                                    game = Game()
-                                    game.run()
-                                elif name == 'opciones':
-                                    self.state = "options"
-                                elif name == 'salir':
-                                    pygame.quit()
-                                    sys.exit()
+                        if self.saved_level is not None and buttons[0].collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()
+                            from game import Game
+                            pygame.mixer.music.stop()
+                            game = Game()
+                            game.current_level = self.saved_level
+                            game.load_level_background()
+                            game.create_enemies()
+                            if self.saved_level in [2, 3]:
+                                game.create_shields()
+                            game.run()
+                            continue
+                        
+                        if buttons[button_offset].collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()
+                            from game import Game
+                            pygame.mixer.music.stop()
+                            game = Game()
+                            game.run()
+                        elif buttons[button_offset + 1].collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()
+                            self.state = "options"
+                        elif buttons[button_offset + 2].collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()
+                            pygame.quit()
+                            sys.exit()
+                
 
                     elif self.state == "options":
-                        for name, btn_rect in buttons:
-                            if btn_rect.collidepoint(mouse_pos):
-                                if name == 'sonido':
-                                    self.state = "sound"
-                                elif name == 'controles':
-                                    self.state = "controls"
-                                elif name == 'volver':
-                                    self.state = "menu"
+                        if buttons[0].collidepoint(mouse_pos):
+                            self.state = "sound"
+                        elif buttons[1].collidepoint(mouse_pos):
+                            self.state = "controls"
+                        elif buttons[2].collidepoint(mouse_pos):
+                            self.state = "menu"
 
                     elif self.state in ("sound", "controls"):
-                        for name, btn_rect in buttons:
-                            if btn_rect.collidepoint(mouse_pos):
-                                if name == 'volver':
-                                    self.state = "options"
+                        if buttons[0].collidepoint(mouse_pos):
+                            self.state = "options"
+
+
 
 
 

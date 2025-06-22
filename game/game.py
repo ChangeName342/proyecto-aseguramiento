@@ -61,6 +61,49 @@ class Game:
         base_path = os.path.dirname(__file__)
         self.save_path = os.path.join(base_path, '..', 'savegame.txt')
 
+         # Inicializar mixer y cargar sonido de clic
+        try:
+            pygame.mixer.init()
+            click_sound_path = os.path.join(base_path, '..', 'sounds', 'eleccion_menu.mp3')
+            self.click_sound = pygame.mixer.Sound(click_sound_path)
+            self.click_sound.set_volume(0.5)
+        except Exception as e:
+            print(f"Error cargando sonido de elección de menú: {e}")
+            self.click_sound = None
+
+        # Sonido de pasar mouse sobre botones del menú de pausa
+        self.hover_sound = None
+        self.hovered_pause_buttons = set()
+        try:
+            base_path = os.path.dirname(__file__)
+            hover_sound_path = os.path.join(base_path, '..', 'sounds', 'seleccionar_menu.mp3')
+            self.hover_sound = pygame.mixer.Sound(hover_sound_path)
+            self.hover_sound.set_volume(0.5)
+        except Exception as e:  
+            print(f"Error cargando sonido de selección de pausa: {e}")
+
+        # Reproducir la música del nivel actual al iniciar
+        self.play_level_music()
+
+    def play_level_music(self):
+        base_path = os.path.dirname(__file__)
+        try:
+            pygame.mixer.music.stop()  # Detener música anterior
+            if self.current_level == 1:
+                music_path = os.path.join(base_path, '..', 'sounds', 'musica_nivel1.mp3')
+            elif self.current_level == 2:
+                music_path = os.path.join(base_path, '..', 'sounds', 'musica_nivel2.mp3')
+            elif self.current_level == 3:
+                music_path = os.path.join(base_path, '..', 'sounds', 'musica_jefe_final.mp3')
+            else:
+                return  # No reproducir música para otros niveles
+
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)  # Loop infinito
+        except Exception as e:
+            print(f"Error cargando música de nivel: {e}")
+
     def load_level_background(self):
         if 1 <= self.current_level <= self.max_levels:
             base_path = os.path.dirname(__file__)
@@ -146,6 +189,8 @@ class Game:
                 if self.paused and not self.game_over and not self.victory:
                     for i, btn_rect in enumerate(self.pause_buttons):
                         if btn_rect.collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()  # <-- Aquí suena al click
                             if self.pause_menu_state == "main":
                                 if i == 0:
                                     self.resume_game()
@@ -161,6 +206,8 @@ class Game:
                 elif self.game_over:
                     for i, btn_rect in enumerate(self.game_over_buttons):
                         if btn_rect.collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()  # <-- Aquí también suena al click
                             if i == 0:
                                 self.delete_save()
                                 self.__init__()
@@ -173,6 +220,8 @@ class Game:
                 elif self.victory:
                     for i, btn_rect in enumerate(self.victory_buttons):
                         if btn_rect.collidepoint(mouse_pos):
+                            if self.click_sound:
+                                self.click_sound.play()  # <-- Aquí también suena al click
                             if i == 0:
                                 self.delete_save()
                                 self.go_to_menu()
@@ -250,6 +299,9 @@ class Game:
                     self.create_shields()
                 for enemy in self.enemies:
                     enemy.speed += self.enemy_speed_increase
+
+                # Reproducir música del nuevo nivel
+                self.play_level_music()
             else:
                 print("¡Has completado todos los niveles!")
                 self.delete_save()  # Borrar progreso al ganar
@@ -305,6 +357,24 @@ class Game:
         rect.center = (x, y)
 
         mouse_pos = pygame.mouse.get_pos()
+        hovered = rect.collidepoint(mouse_pos)
+
+        # Sonido de hover
+        if hovered and text not in self.hovered_pause_buttons:
+            self.hovered_pause_buttons.add(text)
+            if self.hover_sound:
+                self.hover_sound.play()
+        elif not hovered:
+            self.hovered_pause_buttons.discard(text)
+
+        if hovered:
+            pygame.draw.rect(self.screen, hover_bg_color, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
+            rendered_text = self.font.render(text, True, hover_text_color)
+        else:
+            pygame.draw.rect(self.screen, bg_color, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border_color, rect, 3, border_radius=8)
+            rendered_text = self.font.render(text, True, text_color)
 
         if rect.collidepoint(mouse_pos):
             pygame.draw.rect(self.screen, hover_bg_color, rect, border_radius=8)

@@ -29,7 +29,34 @@ class Player:
 
         # Para animación de daño
         self.damage_timer = 0  # cuenta frames para animación daño
-        self.damage_duration = 15  # duración animación en frames (~0.25 seg si 60fps)
+        self.damage_duration = 15  # duración animación en frames
+
+        # Inicializar sonido disparo
+        try:
+            sonido_path = os.path.join(base_path, '..', 'sounds', 'disparo_protagonista.mp3')
+            self.shoot_sound = pygame.mixer.Sound(sonido_path)
+            self.shoot_sound.set_volume(0.3)
+        except Exception as e:
+            print(f"Error cargando sonido de disparo: {e}")
+            self.shoot_sound = None
+
+         # Inicializar sonido de daño recibido
+        try:
+            daño_path = os.path.join(base_path, '..', 'sounds', 'daño_recibido_prota.mp3')
+            self.damage_sound = pygame.mixer.Sound(daño_path)
+            self.damage_sound.set_volume(0.5)
+        except Exception as e:
+            print(f"Error cargando sonido de daño recibido: {e}")
+            self.damage_sound = None
+        
+         # Inicializar sonido de muerte
+        try:
+            muerte_path = os.path.join(base_path, '..', 'sounds', 'sonido_muerte_prota.mp3')
+            self.death_sound = pygame.mixer.Sound(muerte_path)
+            self.death_sound.set_volume(0.7)
+        except Exception as e:
+            print(f"Error cargando sonido de muerte: {e}")
+            self.death_sound = None
 
     def move(self, direction, screen_width):
         if direction == "left" and self.rect.left > 0:
@@ -42,6 +69,8 @@ class Player:
             bullet = pygame.Rect(self.rect.centerx - 2, self.rect.top, 4, 10)
             self.bullets.append(bullet)
             self.cooldown = 20
+            if self.shoot_sound:
+                self.shoot_sound.play()
 
     def update(self, screen_height):
         for bullet in self.bullets[:]:
@@ -59,6 +88,11 @@ class Player:
         """Llamar cuando el jugador recibe daño."""
         self.lives -= 1
         self.damage_timer = self.damage_duration  # activar animación daño
+        if self.damage_sound:
+            self.damage_sound.play()
+        if self.lives <= 0:
+            if self.death_sound:
+                self.death_sound.play()
 
     def draw(self, screen):
         # Si está en daño, dibujar con tintado rojo y parpadeo simple

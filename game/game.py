@@ -82,6 +82,15 @@ class Game:
         except Exception as e:  
             print(f"Error cargando sonido de selección de pausa: {e}")
 
+        try:
+            base_path = os.path.dirname(__file__)
+            musica_victoria_path = os.path.join(base_path, '..', 'sounds', 'musica_victoria.mp3')
+            self.musica_victoria = pygame.mixer.Sound(musica_victoria_path)
+            self.musica_victoria.set_volume(0.7)
+        except Exception as e:
+            print(f"Error cargando musica de victoria: {e}")
+            self.musica_victoria = None
+
         # Reproducir la música del nivel actual al iniciar
         self.play_level_music()
 
@@ -325,8 +334,11 @@ class Game:
                         if enemy.dead:
                             self.enemies.remove(enemy)
                             self.score += 10
-                        else:
-                            self.score += 5
+                           
+                            if isinstance(enemy, FinalBoss) and self.current_level == 3:
+                                self.victory = True
+                                if self.musica_victoria:
+                                    self.musica_victoria.play()
                     break
 
         for enemy in self.enemies:

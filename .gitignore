@@ -1,0 +1,20 @@
+# Directorios de caché de Python
+__pycache__/
+
+# Archivos de bytecode de Python
+*.pyc
+
+# Entorno virtual de Python
+venv/
+
+# Archivos de empaquetado y distribución (generados por PyInstaller, etc.)
+build/
+dist/
+*.spec
+
+# Archivos de registro y logs
+*.log
+
+# Archivos de configuración específicos de editores/IDE
+.vscode/
+.idea/

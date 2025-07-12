@@ -1,4 +1,3 @@
-# shield.py
 import pygame
 
 class Shield:

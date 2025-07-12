@@ -1,4 +1,3 @@
-# game/cloud.py
 import pygame
 import os
 import random

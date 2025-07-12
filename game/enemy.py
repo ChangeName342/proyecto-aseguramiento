@@ -8,6 +8,7 @@ class EnemyBullet:
         self.speed = speed
         self.color = color
         self.shape = shape 
+        
 
     def update(self, screen_height):
         self.rect.y += self.speed
@@ -53,6 +54,7 @@ class Enemy:
         self.dead = False
         self.shoot_probability = 0.0
         self.bullet_color = (255, 0, 0)  # Default red bullet
+        
 
     def update(self, screen_width):
         if self.dead:
@@ -137,5 +139,3 @@ class FinalBoss(Enemy):
         self.bullet_shape = "laser"
         self.lives = 20  # más vida
         self.dead = False
-
-

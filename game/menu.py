@@ -22,16 +22,25 @@ class Menu:
 
         self.clock = pygame.time.Clock()
         self.state = "menu"
-        self.volume = 0.5
+
+        # Volúmenes iniciales (valores entre 0 y 1)
+        self.volume_general = 0.5
+        self.volume_musica = 0.5
+        self.volume_efectos = 0.5
+
         self.muted = False
-        self.saved_volume = 0.5  # Para restaurar después del mute
+        self.saved_volumes = {
+            "general": self.volume_general,
+            "musica": self.volume_musica,
+            "efectos": self.volume_efectos
+        }
 
         # Música de fondo
         try:
             pygame.mixer.init()
             music_path = os.path.join(BASE_DIR, 'sounds', 'menu_principal.mp3')
             pygame.mixer.music.load(music_path)
-            pygame.mixer.music.set_volume(self.volume)
+            pygame.mixer.music.set_volume(self.volume_general * self.volume_musica)
             pygame.mixer.music.play(-1)
         except Exception as e:
             print(f"Error al cargar la música del menú: {e}")
@@ -40,7 +49,7 @@ class Menu:
         try:
             hover_sound_path = os.path.join(BASE_DIR, 'sounds', 'seleccionar_menu.mp3')
             self.hover_sound = pygame.mixer.Sound(hover_sound_path)
-            self.hover_sound.set_volume(0.5)
+            self.hover_sound.set_volume(self.volume_general * self.volume_efectos)
         except Exception as e:
             print(f"Error cargando sonido de selección de menú: {e}")
             self.hover_sound = None
@@ -49,20 +58,32 @@ class Menu:
         try:
             click_sound_path = os.path.join(BASE_DIR, 'sounds', 'eleccion_menu.mp3')
             self.click_sound = pygame.mixer.Sound(click_sound_path)
-            self.click_sound.set_volume(0.5)
+            self.click_sound.set_volume(self.volume_general * self.volume_efectos)
         except Exception as e:
             print(f"Error cargando sonido de elección de menú: {e}")
             self.click_sound = None
 
         self.hovered_buttons = set()  # Para evitar repetir sonido
-        self.slider_rect = pygame.Rect(300, 300, 200, 20)  # Rectángulo para el control deslizante
-        self.slider_knob = pygame.Rect(300 + int(self.volume * 200), 295, 10, 30)  # Control deslizante
-        self.dragging = False  # Para controlar si se está arrastrando el control deslizante
+
+        # Sliders para controlar los volúmenes
+        self.slider_width = 200
+        self.slider_height = 20
+        self.slider_start_x = 300
+        self.sliders = {
+            "general": pygame.Rect(self.slider_start_x, 230, self.slider_width, self.slider_height),
+            "musica": pygame.Rect(self.slider_start_x, 300, self.slider_width, self.slider_height),
+            "efectos": pygame.Rect(self.slider_start_x, 370, self.slider_width, self.slider_height)
+        }
+        self.knobs = {
+            "general": pygame.Rect(self.slider_start_x + int(self.volume_general * self.slider_width) - 5, 225, 10, 30),
+            "musica": pygame.Rect(self.slider_start_x + int(self.volume_musica * self.slider_width) - 5, 295, 10, 30),
+            "efectos": pygame.Rect(self.slider_start_x + int(self.volume_efectos * self.slider_width) - 5, 365, 10, 30)
+        }
+        self.dragging = None  # Indica qué slider se está arrastrando: "general", "musica" o "efectos"
 
         self.saved_level = self.load_progress()
 
     def load_progress(self):
-        """Carga el progreso guardado del juego desde un archivo."""
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         save_path = os.path.join(base_path, 'savegame.txt')
         
@@ -84,7 +105,6 @@ class Menu:
         rect.center = (x, y)
         hovered = rect.collidepoint(mouse_pos)
 
-        # Reproducir sonido al pasar por primera vez
         if hovered and text not in self.hovered_buttons:
             self.hovered_buttons.add(text)
             if self.hover_sound:
@@ -143,55 +163,115 @@ class Menu:
             return sound_button, controls_button, back_button
 
         elif self.state == "sound":
-            # Dibujar controles de volumen
-            self.draw_text("Ajustes de Sonido", 400, 180, self.font)
-            
-            # Barra del control deslizante
-            pygame.draw.rect(self.screen, (100, 100, 100), self.slider_rect)
-            pygame.draw.rect(self.screen, (0, 255, 0), 
-                           (self.slider_rect.x, self.slider_rect.y, 
-                            int(self.volume * self.slider_rect.width), 
-                            self.slider_rect.height))
-            
-            # Control deslizante
-            pygame.draw.rect(self.screen, (255, 255, 255), self.slider_knob)
-            
-            # Texto del volumen
-            self.draw_text(f"Volumen: {int(self.volume * 100)}%", 400, 250, self.small_font)
-            
-            # Botón de mute
+            self.draw_text("Ajustes de Sonido", 400, 150, self.font)
+
+            # Dibujar sliders y etiquetas
+            labels = {
+                "general": "Volumen General",
+                "musica": "Volumen Música",
+                "efectos": "Volumen Efectos"
+            }
+            for i, key in enumerate(["general", "musica", "efectos"]):
+                y = 230 + i * 70
+                self.draw_text(labels[key], 400, y - 30, self.small_font)
+                # Barra slider
+                pygame.draw.rect(self.screen, (100, 100, 100), self.sliders[key])
+                pygame.draw.rect(self.screen, (0, 255, 0), 
+                                (self.sliders[key].x, self.sliders[key].y,
+                                 int(self.get_volume(key) * self.slider_width),
+                                 self.slider_height))
+                # Knob slider
+                pygame.draw.rect(self.screen, (255, 255, 255), self.knobs[key])
+
+            # Botón mute
             mute_text = "Activar sonido" if self.muted else "Silenciar"
-            mute_button = self.draw_button(mute_text, 400, 350, self.small_font, mouse_pos, w=200, h=50)
-            
-            # Botón de volver
-            back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
-            
+            mute_button = self.draw_button(mute_text, 400, 470, self.small_font, mouse_pos, w=200, h=50)
+            # Botón volver
+            back_button = self.draw_button("Volver", 400, 530, self.small_font, mouse_pos, w=200, h=40)
+
             return mute_button, back_button
 
         elif self.state == "controls":
-            self.draw_text("Controles (pendiente)", 400, 250, self.small_font)
-            back_button = self.draw_button("Volver", 400, 500, self.small_font, mouse_pos, w=200, h=40)
+            overlay_height = 280
+            overlay = pygame.Surface((self.screen_width - 100, overlay_height))
+            overlay.set_alpha(180)
+            overlay.fill((30, 30, 30))
+            overlay_rect = overlay.get_rect(center=(self.screen_width // 2, 350))
+            self.screen.blit(overlay, overlay_rect)
+
+            self.draw_text("Controles del Juego", self.screen_width // 2, overlay_rect.top + 30, self.font)
+
+            controls_list = [
+                ("Flechas Izquierda/Derecha", "Mover jugador"),
+                ("Barra Espaciadora", "Disparar"),
+                ("Escape", "Pausar/Reanudar juego"),
+            ]
+
+            start_y = overlay_rect.top + 80
+            line_spacing = 40
+            for i, (key, action) in enumerate(controls_list):
+                y = start_y + i * line_spacing
+                key_text = self.small_font.render(key, True, (255, 255, 255))
+                action_text = self.small_font.render(action, True, (200, 200, 200))
+                self.screen.blit(key_text, (overlay_rect.left + 40, y))
+                self.screen.blit(action_text, (overlay_rect.left + 320, y))
+
+            back_button = self.draw_button("Volver", self.screen_width // 2, overlay_rect.bottom - 30, self.small_font, pygame.mouse.get_pos(), w=200, h=40)
             return (back_button,)
+
+    def get_volume(self, key):
+        if key == "general":
+            return self.volume_general
+        elif key == "musica":
+            return self.volume_musica
+        elif key == "efectos":
+            return self.volume_efectos
+        return 0
+
+    def set_volume(self, key, value):
+        value = max(0, min(1, value))
+        if key == "general":
+            self.volume_general = value
+        elif key == "musica":
+            self.volume_musica = value
+        elif key == "efectos":
+            self.volume_efectos = value
+        self.apply_volumes()
+
+    def apply_volumes(self):
+        # Música (mixer.music) se controla con volumen general * volumen música
+        pygame.mixer.music.set_volume(self.volume_general * self.volume_musica)
+
+        # Sonidos hover y click se controlan con volumen general * volumen efectos
+        if self.hover_sound:
+            self.hover_sound.set_volume(self.volume_general * self.volume_efectos)
+        if self.click_sound:
+            self.click_sound.set_volume(self.volume_general * self.volume_efectos)
 
     def toggle_mute(self):
         if self.muted:
-            # Restaurar volumen
-            self.volume = self.saved_volume
+            # Restaurar volúmenes
+            self.volume_general = self.saved_volumes["general"]
+            self.volume_musica = self.saved_volumes["musica"]
+            self.volume_efectos = self.saved_volumes["efectos"]
             self.muted = False
         else:
-            # Guardar volumen actual y silenciar
-            self.saved_volume = self.volume
-            self.volume = 0
-            self.muted = True
-        self.update_volume()
+            # Guardar y silenciar todo
+            self.saved_volumes["general"] = self.volume_general
+            self.saved_volumes["musica"] = self.volume_musica
+            self.saved_volumes["efectos"] = self.volume_efectos
 
-    def update_volume(self):
-        pygame.mixer.music.set_volume(self.volume)
-        if self.hover_sound:
-            self.hover_sound.set_volume(self.volume * 0.5)
-        if self.click_sound:
-            self.click_sound.set_volume(self.volume * 0.5)
-        self.slider_knob.x = self.slider_rect.x + int(self.volume * self.slider_rect.width) - 5
+            self.volume_general = 0
+            self.volume_musica = 0
+            self.volume_efectos = 0
+            self.muted = True
+        self.update_sliders()
+        self.apply_volumes()
+
+    def update_sliders(self):
+        self.knobs["general"].x = self.sliders["general"].x + int(self.volume_general * self.slider_width) - 5
+        self.knobs["musica"].x = self.sliders["musica"].x + int(self.volume_musica * self.slider_width) - 5
+        self.knobs["efectos"].x = self.sliders["efectos"].x + int(self.volume_efectos * self.slider_width) - 5
 
     def run(self):
         while True:
@@ -213,7 +293,7 @@ class Menu:
                             if self.click_sound:
                                 self.click_sound.play()
                             pygame.mixer.music.stop()
-                            game = Game()  # Usa la clase ya importada
+                            game = Game()
                             game.current_level = self.saved_level
                             game.load_level_background()
                             game.create_enemies()
@@ -226,7 +306,7 @@ class Menu:
                             if self.click_sound:
                                 self.click_sound.play()
                             pygame.mixer.music.stop()
-                            game = Game()  # Usa la clase ya importada
+                            game = Game()
                             game.run()
                         elif buttons[button_offset + 1].collidepoint(mouse_pos):
                             if self.click_sound:
@@ -254,26 +334,25 @@ class Menu:
                         elif buttons[1].collidepoint(mouse_pos):  # Botón de volver
                             self.state = "options"
                         
-                        # Verificar si se hizo clic en el control deslizante
-                        if self.slider_knob.collidepoint(mouse_pos):
-                            self.dragging = True
-                        elif self.slider_rect.collidepoint(mouse_pos):
-                            # Calcular el volumen basado en la posición del clic
-                            self.volume = (mouse_pos[0] - self.slider_rect.x) / self.slider_rect.width
-                            self.volume = max(0, min(1, self.volume))
-                            self.update_volume()
+                        # Control de sliders
+                        for key in ["general", "musica", "efectos"]:
+                            if self.knobs[key].collidepoint(mouse_pos):
+                                self.dragging = key
+                                break
+                            elif self.sliders[key].collidepoint(mouse_pos):
+                                new_vol = (mouse_pos[0] - self.sliders[key].x) / self.slider_width
+                                self.set_volume(key, new_vol)
 
                     elif self.state == "controls":
                         if buttons[0].collidepoint(mouse_pos):
                             self.state = "options"
 
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                    self.dragging = False
+                    self.dragging = None
 
                 elif event.type == pygame.MOUSEMOTION and self.dragging:
-                    # Actualizar volumen mientras se arrastra el control deslizante
                     mouse_pos = pygame.mouse.get_pos()
-                    self.volume = (mouse_pos[0] - self.slider_rect.x) / self.slider_rect.width
-                    self.volume = max(0, min(1, self.volume))
-                    self.update_volume()
-                    self.slider_knob.x = self.slider_rect.x + int(self.volume * self.slider_rect.width) - 5
+                    new_vol = (mouse_pos[0] - self.sliders[self.dragging].x) / self.slider_width
+                    self.set_volume(self.dragging, new_vol)
+                    self.update_sliders()
+

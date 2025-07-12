@@ -1,4 +1,3 @@
-# game/satellite.py
 import pygame
 import os
 import random
